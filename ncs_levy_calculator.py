@@ -332,9 +332,9 @@ with c2:
 st.markdown("---")
 st.markdown("### What would care cost you without NCS?")
 
-# Care cost constants (LaingBuisson 2025 prices, from simulation_nap_copy.ipynb)
-RESI_CARE_ANNUAL = 67_500   # £/yr residential care home
-MEANS_TEST_THRESHOLD = 23_250  # £ savings threshold for council support
+# Care cost constants (LaingBuisson, uplifted to Q2 2026 prices at +2.75%)
+RESI_CARE_ANNUAL = 69_356   # £/yr residential care home (£67,500 × 1.0275)
+MEANS_TEST_THRESHOLD = 23_250  # £ savings threshold for council support (statutory, unchanged since 2010)
 
 RESI_YEARS = 3   # illustrative duration for comparison
 resi_total = RESI_CARE_ANNUAL * RESI_YEARS
@@ -362,7 +362,7 @@ with sc1:
   you are expected to fund your own care until your assets fall below that threshold.
 
 If you needed **{RESI_YEARS} years of residential care** at current market rates
-(£{RESI_CARE_ANNUAL:,}/yr, LaingBuisson 2025), the total bill would be around
+(£{RESI_CARE_ANNUAL:,}/yr, LaingBuisson, Q2 2026 prices), the total bill would be around
 **£{resi_total:,.0f}**.
 
 To cover that by saving gradually over **{saving_years} years**, you would need to set
