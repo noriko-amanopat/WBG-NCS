@@ -133,7 +133,7 @@ st.markdown("---")
 col_sal, col_yr = st.columns([3, 2])
 
 with col_sal:
-    st.markdown("### 💷 Your annual salary")
+    st.markdown("### 💷 Enter your annual salary")
     income = st.number_input(
         "Annual gross income (£)",
         min_value=0,
@@ -150,7 +150,7 @@ with col_sal:
     st.caption("Default: £39,039 — England median full-time salary (ONS 2025–26)")
 
 with col_yr:
-    st.markdown("### 📅 Year")
+    st.markdown("### 📅 Pick a year")
     year = st.slider(
         "Year",
         min_value=2026,
