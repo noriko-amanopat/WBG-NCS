@@ -105,6 +105,28 @@ st.markdown(
     "10-year pre-funding phase before NCS launches in 2036–37."
 )
 
+with st.expander("ℹ️ What assumptions are behind these figures?"):
+    st.markdown(
+        """
+To keep costs manageable, WBG proposes a **guaranteed entitlement floor** rather than open-ended coverage:
+the state covers care costs up to a set number of years, individuals contribute for a window after that,
+and a government backstop then kicks in for the very longest-term cases — protecting people from catastrophic costs
+without unlimited public liability.
+
+The levy figures shown here correspond to a floor that covers:
+- **4 years of residential care** and **3 years of home care** (with a 15 hours/week cap)
+
+Because WBG is committed to fair pay for care workers, all costs are calculated using **fair wages —
+equivalent to 75% of NHS Band 4 pay** (the band covering healthcare assistants and senior care workers).
+This is meaningfully above current average care sector wages, and reflects the workforce investment
+a well-functioning NCS would require.
+
+On the funding side, the model assumes that inheritance tax (IHT) revenue is hypothecated to the NCS fund
+(OBR 2026–27 estimate: £9.5bn, growing to ~£26bn by 2036–37), alongside redirected local authority adult
+social care spending and a levy on private equity providers' excess profits.
+        """
+    )
+
 st.markdown("---")
 
 # ── PROMINENT INPUTS ───────────────────────────────────────────────────────────
@@ -306,6 +328,70 @@ with c2:
         f"launch rather than jumping further."
     )
 
+# ── WITHOUT NCS: SELF-FUNDING COMPARISON ──────────────────────────────────────
+st.markdown("---")
+st.markdown("### What would care cost you without NCS?")
+
+# Care cost constants (LaingBuisson 2025 prices, from simulation_nap_copy.ipynb)
+RESI_CARE_ANNUAL = 67_500   # £/yr residential care home
+MEANS_TEST_THRESHOLD = 23_250  # £ savings threshold for council support
+
+RESI_YEARS = 3   # illustrative duration for comparison
+resi_total = RESI_CARE_ANNUAL * RESI_YEARS
+
+sc1, sc2, sc3 = st.columns([2, 2, 1])
+
+with sc3:
+    saving_years = st.number_input(
+        "Years to save",
+        min_value=5, max_value=50, value=40, step=1,
+        help="How many years you'd have to set money aside. "
+             "Roughly your working years remaining — e.g. 40 if you're around 25, 30 if you're around 35.",
+    )
+
+monthly_saving = resi_total / (saving_years * 12)
+
+with sc1:
+    st.markdown(
+        f"""
+**Without NCS**, whether the council helps depends on your savings:
+
+- If you have **less than £{MEANS_TEST_THRESHOLD:,}** in savings when you need adult social care,
+  the local council contributes towards your costs.
+- If you have **more than £{MEANS_TEST_THRESHOLD:,}** — for example, if you own a home —
+  you are expected to fund your own care until your assets fall below that threshold.
+
+If you needed **{RESI_YEARS} years of residential care** at current market rates
+(£{RESI_CARE_ANNUAL:,}/yr, LaingBuisson 2025), the total bill would be around
+**£{resi_total:,.0f}**.
+
+To cover that by saving gradually over **{saving_years} years**, you would need to set
+aside roughly **£{monthly_saving:,.0f}/month** — on top of everything else.
+        """
+    )
+
+with sc2:
+    st.markdown("**Under NCS, those same 3 years cost you nothing extra.**")
+    st.markdown(
+        f"The NCS entitlement floor covers up to **4 years of residential care** and "
+        f"**3 years of home care** in full. Any episode within those limits is paid by the state."
+    )
+    levy_yr1_monthly = carepool_levy(income, agg_rate_for_year(2026)) / 12
+    levy_now_monthly = levy_now / 12
+    st.markdown(
+        f"Your NCS levy starts at **£{levy_yr1_monthly:,.0f}/month** (2026–27) "
+        f"and reaches **£{levy_now_monthly:,.0f}/month** by {year_label_plain(year)} — "
+        f"compared to the **£{monthly_saving:,.0f}/month** you would need to self-insure "
+        f"against the same scenario."
+    )
+    if monthly_saving > levy_now_monthly:
+        ratio = monthly_saving / levy_yr1_monthly
+        st.success(
+            f"Self-insuring against just **one** 3-year residential care episode "
+            f"would cost **{ratio:.1f}× more per month** than the NCS levy from day one — "
+            f"and the levy covers the worst case, not just one scenario."
+        )
+
 # ── BAND BREAKDOWN ─────────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown("### Levy breakdown by income band")
@@ -346,22 +432,22 @@ st.dataframe(bd_df, use_container_width=True, hide_index=True)
 
 # ── ALL-YEAR COMPARISON TABLE ──────────────────────────────────────────────────
 st.markdown("---")
-with st.expander("Full year-by-year comparison table"):
-    rows = []
-    for yr in ALL_YEARS:
-        ar  = agg_rate_for_year(yr)
-        lv  = carepool_levy(income, ar)
-        pct = lv / current_total * 100 if current_total > 0 else 0
-        rows.append({
-            "Year": year_label_plain(yr),
-            "Phase": "Phase 1 — pre-funding" if yr <= 2035 else "Phase 2 — NCS launched",
-            "Agg. rate (% WB)": f"{ar*100:.3f}%",
-            "Monthly": f"£{lv/12:,.0f}",
-            "Annual levy": f"£{lv:,.0f}",
-            "% increase vs today": f"+{pct:.1f}%",
-            "As % of gross income": f"{lv/income*100:.2f}%" if income > 0 else "—",
-        })
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+st.markdown("### Full year-by-year comparison")
+rows = []
+for yr in ALL_YEARS:
+    ar  = agg_rate_for_year(yr)
+    lv  = carepool_levy(income, ar)
+    pct = lv / current_total * 100 if current_total > 0 else 0
+    rows.append({
+        "Year": year_label_plain(yr),
+        "Phase": "Phase 1 — pre-funding" if yr <= 2035 else "Phase 2 — NCS launched",
+        "Agg. rate (% WB)": f"{ar*100:.3f}%",
+        "Monthly": f"£{lv/12:,.0f}",
+        "Annual levy": f"£{lv:,.0f}",
+        "% increase vs today": f"+{pct:.1f}%",
+        "As % of gross income": f"{lv/income*100:.2f}%" if income > 0 else "—",
+    })
+st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 # ── FOOTER ─────────────────────────────────────────────────────────────────────
 st.markdown("---")
