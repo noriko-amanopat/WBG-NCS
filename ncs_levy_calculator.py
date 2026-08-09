@@ -139,13 +139,16 @@ a well-functioning NCS would require.
 On the funding side, the model assumes that inheritance tax (IHT) revenue is hypothecated to the NCS fund
 (OBR 2026–27 estimate: £9.5bn, growing to ~£26bn by 2036–37), alongside redirected local authority adult
 social care spending and a levy on private equity providers' excess profits.
+
+To help put our estimates in context, the key assumptions for our benchmark scenario (without the NCS) are 
+outlined below.
         """
     )
 
 st.markdown(
     " **Note:** The Women's Budget Group's National Care Service (NCS) model is still in development."
     " Our goal is to design a framework that is progressive and equitable, particularly for lower-income households. "
-    " Please be aware that the current levy estimates are preliminary and do not yet fully capture our proposed safeguards "
+    " Please be aware that the **current levy estimates are preliminary** and do not yet fully capture our proposed safeguards "
     " for individuals who earn above the income tax threshold (£12,570) but have limited or no accumulated assets."
 )
 
@@ -366,7 +369,7 @@ with left:
     st.caption(
         f"\\* The cost of self-funding (without NCS) is spread equally over {saving_years} years of saving. "
         "The costs of residential care are assumed to be £69,356/yr (LaingBuisson, Q2 2026). "
-        "The costs of home care are assumed to be £33,751/yr (3 hrs/day visiting care). "
+        "The costs of home care are assumed to be £33,751/yr (3 hrs/day visiting care); these are current private-market rates. "
         f"Note: The chart does not account for investment returns or care cost inflation.{mid_note}"
     )
 
