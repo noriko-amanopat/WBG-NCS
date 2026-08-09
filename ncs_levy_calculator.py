@@ -8,28 +8,43 @@ Run:  streamlit run ncs_levy_calculator.py
 Requires: streamlit, plotly  (pip install streamlit plotly)
 """
 
+import math
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 
 st.set_page_config(
-    page_title="NCS CarePool Levy Calculator",
+    page_title="WBG's NCS Levy Calculator",
     page_icon="🏥",
     layout="wide",
 )
 
 # ── CONSTANTS (from NCS_CarePool_Tool_v4.xlsx, Levy Estimates tab) ─────────────
+# Income tax
 PA             = 12_570     # Personal allowance 2025-26
 BASIC_UPPER    = 50_270     # Top of basic rate band
 HIGHER_UPPER   = 125_140    # Top of higher rate band
+# National Insurance
 NI_LOWER       = 12_570
 NI_UPPER       = 50_270
 NI_MAIN        = 0.08       # Post-April 2025 employee NI rate
 NI_UPPER_RATE  = 0.02
+# Council tax
 COUNCIL_TAX    = 1_628.25   # Band D, 25% single-person discount, 2024-25
+# NCS levy structure
 K2             = 1.6        # r_higher / r_basic
 K3             = 2.0        # r_additional / r_basic
 SCALING        = 1.3532     # Weighted levy base / England wage bill
+
+# Care cost constants (LaingBuisson, uplifted to Q2 2026 prices at +2.75%)
+RESI_CARE_ANNUAL   = 69_356   # £/yr residential care home (£67,500 × 1.0275)
+HOME_CARE_ANNUAL   = 33_751   # £/yr visiting home care, 3 hrs/day (£32,850 × 1.0275)
+MEANS_TEST_UPPER = 23_250   # upper capital limit: self-fund above this (frozen since 2010)
+MEANS_TEST_LOWER = 14_250   # lower capital limit: full LA support below this (frozen since 2010)
+MEANS_TEST_MID   = 18_750   # midpoint assumption for £14,250–£23,250 band
+# Tariff income for midpoint: £1/wk per £250 (or part) above lower limit → 18 × 52 = £936/yr
+TARIFF_INCOME_ANNUAL = math.ceil((MEANS_TEST_MID - MEANS_TEST_LOWER) / 250) * 52  # £936
+# see https://www.nhs.uk/social-care-and-support/money-work-and-benefits/when-the-council-might-pay-for-your-care/
 
 # Year → aggregate levy rate (% of England wage bill)
 # Phase 1: linear ramp from 1.0% (2026) to 2.0% (2035)
@@ -97,7 +112,7 @@ def levy_band_breakdown(y: float, agg_rate: float) -> dict:
 
 
 # ── HEADER ─────────────────────────────────────────────────────────────────────
-st.title("🏥 NCS CarePool — Individual Levy Calculator")
+st.title("🏥 WBG's NCS Levy Calculator")
 st.markdown(
     "Estimate your annual contribution to the proposed **Social Care Levy** under the "
     "Women's Budget Group National Care Service (NCS) model. The levy funds a guaranteed "
@@ -105,12 +120,12 @@ st.markdown(
     "10-year pre-funding phase before NCS launches in 2036–37."
 )
 
-with st.expander("ℹ️ What assumptions are behind these figures?"):
+with st.expander("🔏 What assumptions are behind these figures?"):
     st.markdown(
         """
 To keep costs manageable, WBG proposes a **guaranteed entitlement floor** rather than open-ended coverage:
 the state covers care costs up to a set number of years, individuals contribute for a window after that,
-and a government backstop then kicks in for the very longest-term cases — protecting people from catastrophic costs
+and a government backstop then kicks in for the very long-term cases — protecting people from catastrophic costs
 without unlimited public liability.
 
 The levy figures shown here correspond to a floor that covers:
@@ -127,13 +142,20 @@ social care spending and a levy on private equity providers' excess profits.
         """
     )
 
+st.markdown(
+    " **Note:** The Women's Budget Group's National Care Service (NCS) model is still in development."
+    " Our goal is to design a framework that is progressive and equitable, particularly for lower-income households. "
+    " Please be aware that the current levy estimates are preliminary and do not yet fully capture our proposed safeguards "
+    " for individuals who earn above the income tax threshold (£12,570) but have limited or no accumulated assets."
+)
+
 st.markdown("---")
 
 # ── PROMINENT INPUTS ───────────────────────────────────────────────────────────
-col_sal, col_yr = st.columns([3, 2])
+col_sal, col_yr, col_assets = st.columns([2, 2, 2])
 
 with col_sal:
-    st.markdown("### 💷 Enter your annual salary")
+    st.markdown("### 💷 Your annual salary")
     income = st.number_input(
         "Annual gross income (£)",
         min_value=0,
@@ -150,7 +172,7 @@ with col_sal:
     st.caption("Default: £39,039 — England median full-time salary (ONS 2025–26)")
 
 with col_yr:
-    st.markdown("### 📅 Pick a year")
+    st.markdown("### 📅 Year")
     year = st.slider(
         "Year",
         min_value=2026,
@@ -165,7 +187,32 @@ with col_yr:
         phase_name = "Phase 2 — NCS launched 🎉"
     st.caption(f"{year_label_plain(year)}  ·  {phase_name}")
 
+with col_assets:
+    st.markdown("### 🏠 Assets or savings above £23,250?")
+    has_assets = st.radio(
+        "Assets / savings level",
+        options=["Yes (above £23,250)", "£14,250–£23,250", "No (below £14,250)"],
+        index=0,
+        horizontal=False,
+        label_visibility="collapsed",
+    )
+    with st.expander("What does this mean?"):
+        st.markdown(
+            "England's means-test for adult social care has two thresholds (both frozen since 2010):  \n"
+            "- **Above £23,250** — you self-fund care in full until your assets fall below this level.  \n"
+            "- **£14,250–£23,250** — the council helps, but you pay *tariff income*: "
+            "£1/week for every £250 (or part) of capital above £14,250 "
+            "(max ~£36/week ≈ £1,872/year at the top of the band).  \n"
+            "- **Below £14,250** — the council pays in full; no tariff income.  \n\n"
+            "Assets include savings **and** the value of your home if you need residential care. "
+            "Most homeowners fall in the top band. See https://commonslibrary.parliament.uk/research-briefings/sn01911/"
+        )
+
 st.markdown("---")
+
+# saving_years widget appears below the chart but its value is needed here;
+# read from session state on re-runs (defaults to 40 on first load).
+saving_years = int(st.session_state.get("saving_years_key", 40))
 
 # ── COMPUTED VALUES ────────────────────────────────────────────────────────────
 it            = income_tax(income)
@@ -182,15 +229,30 @@ all_levies = [carepool_levy(income, agg_rate_for_year(yr)) for yr in ALL_YEARS]
 all_pcts   = [lv / current_total * 100 if current_total > 0 else 0.0 for lv in all_levies]
 all_labels = [year_label(yr) for yr in ALL_YEARS]
 
+# Self-insurance annual equivalents (Q2 2026 prices, spread over saving_years)
+HOME_CARE_YEARS  = 2   # scenario: 2 years of home care
+RESI_YEARS_CHART = 3   # scenario: 3 years of residential care
+
+if has_assets == "Yes (above £23,250)":
+    self_insure_home = (HOME_CARE_ANNUAL * HOME_CARE_YEARS) / saving_years
+    self_insure_resi = (RESI_CARE_ANNUAL * RESI_YEARS_CHART) / saving_years
+elif has_assets == "£14,250–£23,250":
+    # Only tariff income applies (assume £18,750 midpoint → £936/yr)
+    self_insure_home = (TARIFF_INCOME_ANNUAL * HOME_CARE_YEARS) / saving_years
+    self_insure_resi = (TARIFF_INCOME_ANNUAL * RESI_YEARS_CHART) / saving_years
+else:  # below £14,250
+    self_insure_home = 0.0
+    self_insure_resi = 0.0
+
 # ── KEY METRICS ────────────────────────────────────────────────────────────────
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("NCS levy", f"£{levy_now/12:,.0f}/month", f"£{levy_now:,.0f}/year")
 m2.metric("Increase on current tax bill", f"+{pct_inc:.1f}%")
 m3.metric("Effective rate on income", f"{levy_now/income*100:.2f}%" if income > 0 else "—")
 m4.metric(
-    "Current taxes (IT + NI + CT)",
+    "Your current annual contributions (IT + NI + CT)",
     f"£{current_total:,.0f}",
-    f"→ £{current_total + levy_now:,.0f} with levy",
+    f"they'd be £{current_total + levy_now:,.0f} with NCS levy",
 )
 
 st.markdown("---")
@@ -198,47 +260,121 @@ st.markdown("---")
 # ── CHARTS ────────────────────────────────────────────────────────────────────
 left, right = st.columns(2)
 
-# LEFT: stacked bar — before vs this year
+# LEFT: stacked bar — before / with NCS / without NCS self-insurance scenarios
 with left:
-    st.markdown("#### Where your money goes")
-    bar_labels = ["Before NCS<br>(today)", f"With NCS levy<br>({year_label(year)})"]
+    st.markdown("#### Annual cost: NCS levy vs. self-insuring")
+
+    if has_assets == "Yes (above £23,250)":
+        no_assets_note = ""
+    elif has_assets == "£14,250–£23,250":
+        no_assets_note = "<br><i>(tariff income only)</i>"
+    else:
+        no_assets_note = "<br><i>(council pays)</i>"
+    bar_labels = [
+        "Before NCS<br>(today)",
+        f"With NCS<br>({year_label(year)})",
+        f"Without NCS<br>2yr home care*{no_assets_note}",
+        f"Without NCS<br>3yr residential*{no_assets_note}",
+    ]
+
+    # Annotation text above each bar
+    def bar_top_text(extra, base):
+        if extra == 0 and has_assets == "No (below £14,250)":
+            return "Council pays"
+        if extra == 0:
+            return ""
+        pct = extra / base * 100
+        return f"+£{extra:,.0f}/yr<br>(+{pct:.0f}%)"
+
+    it_vals   = [it] * 4
+    ni_vals   = [ni] * 4
+    ct_vals   = [ct] * 4
+    levy_vals = [0, levy_now, 0, 0]
+    home_vals = [0, 0, self_insure_home, 0]
+    resi_vals = [0, 0, 0, self_insure_resi]
+
+    # Each trace handles its own top label so all sit at "outside" the same layer
+    levy_texts = ["", f"+£{levy_now:,.0f}/yr<br>(+{pct_inc:.0f}%)", "", ""]
+    resi_texts = ["", "", bar_top_text(self_insure_home, current_total),
+                          bar_top_text(self_insure_resi, current_total)]
 
     fig_bar = go.Figure()
+    fig_bar.add_bar(name="Income Tax",         x=bar_labels, y=it_vals,   marker_color="#1f4e79",  legendgroup=2)
+    fig_bar.add_bar(name="National Insurance", x=bar_labels, y=ni_vals,   marker_color="#2e75b6",  legendgroup=1)
+    fig_bar.add_bar(name="Council Tax",        x=bar_labels, y=ct_vals,   marker_color="#9dc3e6",  legendgroup=0)
     fig_bar.add_bar(
-        name="Income Tax",
-        x=bar_labels, y=[it, it],
-        marker_color="#1f4e79",
+        name="NCS Levy",
+        x=bar_labels, y=levy_vals, marker_color="#c00000", legendgroup=3,
+        text=levy_texts, textposition="outside",
+        textfont=dict(size=10, color="#c00000"),
     )
     fig_bar.add_bar(
-        name="National Insurance",
-        x=bar_labels, y=[ni, ni],
-        marker_color="#2e75b6",
+        name=f"No NCS: 2yr home care (÷{saving_years}yr)",
+        x=bar_labels, y=home_vals, marker_color="#e07b20", legendgroup=4,
     )
     fig_bar.add_bar(
-        name="Council Tax",
-        x=bar_labels, y=[ct, ct],
-        marker_color="#9dc3e6",
+        name=f"No NCS: 3yr residential (÷{saving_years}yr)",
+        x=bar_labels, y=resi_vals, marker_color="#bf5000", legendgroup=5,
+        text=resi_texts, textposition="outside",
+        textfont=dict(size=10, color="#444444"),
     )
-    fig_bar.add_bar(
-        name="CarePool Levy",
-        x=bar_labels, y=[0, levy_now],
-        marker_color="#c00000",
-        text=["", f"+{pct_inc:.1f}%"],
-        textposition="outside",
-        textfont=dict(size=13, color="#c00000"),
+
+    # Dashed divider between "With NCS" (bar 1) and "Without NCS" (bar 2)
+    fig_bar.add_vline(
+        x=1.5, line_dash="dash", line_color="#888888", line_width=1.5,
     )
+    fig_bar.add_annotation(
+        x=1.57, y=0, yref="paper", yanchor="bottom", yshift=280,
+        text="← with NCS  |  without NCS →",
+        showarrow=False, font=dict(size=15, color="#888888"),
+        bgcolor="white",
+    )
+
+    y_max = max(current_total + levy_now,
+                current_total + self_insure_home,
+                current_total + self_insure_resi)
+
     fig_bar.update_layout(
         barmode="stack",
-        yaxis=dict(tickprefix="£", tickformat=",", title="Annual contribution (£)"),
-        legend=dict(orientation="h", y=1.1, x=0),
-        height=430, margin=dict(t=40, b=10, l=0, r=0),
+        yaxis=dict(
+            tickprefix="£", tickformat=",",
+            title="Annual contribution (£)",
+            range=[0, y_max * 1.32],
+        ),
+        legend=dict(
+            orientation="h", y=-0.28, x=0, font=dict(size=9),
+            entrywidth=155,
+        ),
+        height=470, margin=dict(t=20, b=10, l=0, r=0),
         plot_bgcolor="white", paper_bgcolor="white",
     )
     st.plotly_chart(fig_bar, use_container_width=True)
+    col_sy, _ = st.columns([5, 5])
+    with col_sy:
+        st.number_input(
+            "Years to spread self-insurance costs",
+            min_value=5, max_value=50, value=saving_years, step=1,
+            key="saving_years_key",
+            help="How many years you'd have to save — roughly your working years remaining "
+                 "(e.g. 40 if you're ~25, 30 if you're ~35).",
+        )
+    mid_note = (
+        f" Assets in the £14,250–£23,250 band, are assumed to be £{MEANS_TEST_MID:,} (midpoint) for the chart,"
+        f"→ tariff income of £{TARIFF_INCOME_ANNUAL}/yr (£1/wk per £250 above £{MEANS_TEST_LOWER:,})."
+        if has_assets == "£14,250–£23,250" else ""
+    )
+    st.caption(
+        f"\\* The cost of self-funding (without NCS) is spread equally over {saving_years} years of saving. "
+        "The costs of residential care are assumed to be £69,356/yr (LaingBuisson, Q2 2026). "
+        "The costs of home care are assumed to be £33,751/yr (3 hrs/day visiting care). "
+        f"Note: The chart does not account for investment returns or care cost inflation.{mid_note}"
+    )
+
+
 
 # RIGHT: bar chart — levy trajectory by year with % increase labels on top
 with right:
-    st.markdown("#### Your monthly CarePool levy by year  (% increase vs today's taxes)")
+    st.markdown("#### Your monthly NCS levy by year  (% increase vs today's taxes)")
 
     all_monthly = [lv / 12 for lv in all_levies]
 
@@ -332,62 +468,61 @@ with c2:
 st.markdown("---")
 st.markdown("### What would care cost you without NCS?")
 
-# Care cost constants (LaingBuisson, uplifted to Q2 2026 prices at +2.75%)
-RESI_CARE_ANNUAL = 69_356   # £/yr residential care home (£67,500 × 1.0275)
-MEANS_TEST_THRESHOLD = 23_250  # £ savings threshold for council support (statutory, unchanged since 2010)
-
-RESI_YEARS = 3   # illustrative duration for comparison
+RESI_YEARS = 3
 resi_total = RESI_CARE_ANNUAL * RESI_YEARS
-
-sc1, sc2, sc3 = st.columns([2, 2, 1])
-
-with sc3:
-    saving_years = st.number_input(
-        "Years to save",
-        min_value=5, max_value=50, value=40, step=1,
-        help="How many years you'd have to set money aside. "
-             "Roughly your working years remaining — e.g. 40 if you're around 25, 30 if you're around 35.",
-    )
-
 monthly_saving = resi_total / (saving_years * 12)
 
+levy_yr1_monthly = carepool_levy(income, agg_rate_for_year(2026)) / 12
+levy_now_monthly = levy_now / 12
+sc1, sc2 = st.columns(2)
+
 with sc1:
-    st.markdown(
-        f"""
-**Without NCS**, whether the council helps depends on your savings:
-
-- If you have **less than £{MEANS_TEST_THRESHOLD:,}** in savings when you need adult social care,
-  the local council contributes towards your costs.
-- If you have **more than £{MEANS_TEST_THRESHOLD:,}** — for example, if you own a home —
-  you are expected to fund your own care until your assets fall below that threshold.
-
-If you needed **{RESI_YEARS} years of residential care** at current market rates
-(£{RESI_CARE_ANNUAL:,}/yr, LaingBuisson, Q2 2026 prices), the total bill would be around
-**£{resi_total:,.0f}**.
-
-To cover that by saving gradually over **{saving_years} years**, you would need to set
-aside roughly **£{monthly_saving:,.0f}/month** — on top of everything else.
-        """
-    )
+    if has_assets == "Yes (above £23,250)":
+        st.markdown(
+            f"Your assets exceed £{MEANS_TEST_UPPER:,}, so you would self-fund care "
+            f"in full until you spend down below that threshold.  \n\n"
+            f"**{RESI_YEARS} years of residential care** at current market rates "
+            f"(£{RESI_CARE_ANNUAL:,}/yr, LaingBuisson, Q2 2026 prices) would cost around "
+            f"**£{resi_total:,.0f}** in total.  \n\n"
+            f"Saving for that over **{saving_years} years** means setting aside "
+            f"**£{monthly_saving:,.0f}/month** on top of all your existing taxes."
+        )
+    elif has_assets == "£14,250–£23,250":
+        tariff_total = TARIFF_INCOME_ANNUAL * RESI_YEARS
+        tariff_monthly = tariff_total / (saving_years * 12)
+        st.markdown(
+            f"Your assets fall in the middle band (£{MEANS_TEST_LOWER:,}–£{MEANS_TEST_UPPER:,}). "
+            f"The council would help, but you'd pay **tariff income** — £1/week per £250 of "
+            f"capital above £{MEANS_TEST_LOWER:,}.  \n\n"
+            f"Assuming £{MEANS_TEST_MID:,} assets (midpoint), that's **£{TARIFF_INCOME_ANNUAL}/year**. "
+            f"Over {RESI_YEARS} years of residential care, your total contribution would be "
+            f"**£{tariff_total:,}** — far less than full self-funding, but not zero.  \n\n"
+            f"Saving for that over **{saving_years} years** means setting aside "
+            f"**£{tariff_monthly:,.0f}/month**."
+        )
+    else:  # below £14,250
+        st.markdown(
+            f"Your assets are below £{MEANS_TEST_LOWER:,}, so the council would pay your "
+            f"care costs in full — no tariff income applies.  \n\n"
+            f"Note that both thresholds have been frozen since 2010 and are not uprated "
+            f"with inflation. If you accumulate savings or own a home over a working life, "
+            f"you may well move into a higher band by the time you need care."
+        )
 
 with sc2:
-    st.markdown("**Under NCS, those same 3 years cost you nothing extra.**")
+    st.markdown("**Under NCS, those same care years cost you nothing extra.**")
     st.markdown(
-        f"The NCS entitlement floor covers up to **4 years of residential care** and "
-        f"**3 years of home care** in full. Any episode within those limits is paid by the state."
+        f"The entitlement floor covers up to **4 years of residential care** and "
+        f"**3 years of home care** in full — paid by the state regardless of your assets."
     )
-    levy_yr1_monthly = carepool_levy(income, agg_rate_for_year(2026)) / 12
-    levy_now_monthly = levy_now / 12
     st.markdown(
         f"Your NCS levy starts at **£{levy_yr1_monthly:,.0f}/month** (2026–27) "
-        f"and reaches **£{levy_now_monthly:,.0f}/month** by {year_label_plain(year)} — "
-        f"compared to the **£{monthly_saving:,.0f}/month** you would need to self-insure "
-        f"against the same scenario."
+        f"and reaches **£{levy_now_monthly:,.0f}/month** by {year_label_plain(year)}."
     )
-    if monthly_saving > levy_now_monthly:
+    if has_assets == "Yes (above £23,250)" and monthly_saving > levy_yr1_monthly:
         ratio = monthly_saving / levy_yr1_monthly
         st.success(
-            f"Self-insuring against just **one** 3-year residential care episode "
+            f"Self-insuring against just **one** {RESI_YEARS}-year residential care episode "
             f"would cost **{ratio:.1f}× more per month** than the NCS levy from day one — "
             f"and the levy covers the worst case, not just one scenario."
         )
