@@ -123,7 +123,7 @@ st.markdown(
 with st.expander("🔏 What assumptions are behind these figures?"):
     st.markdown(
         """
-To keep costs manageable, WBG proposes a **guaranteed entitlement floor** rather than open-ended coverage:
+This WBG model proposes a **guaranteed entitlement floor** rather than open-ended coverage:
 the state covers care costs up to a set number of years, individuals contribute for a window after that,
 and a government backstop then kicks in for the very long-term cases — protecting people from catastrophic costs
 without unlimited public liability.
@@ -265,7 +265,7 @@ left, right = st.columns(2)
 
 # LEFT: stacked bar — before / with NCS / without NCS self-insurance scenarios
 with left:
-    st.markdown("#### Annual cost: NCS levy vs. self-insuring")
+    st.markdown("#### Annual cost: NCS levy vs. self-funding")
 
     if has_assets == "Yes (above £23,250)":
         no_assets_note = ""
