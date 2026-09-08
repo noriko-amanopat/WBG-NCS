@@ -36,6 +36,9 @@ K2             = 1.6        # r_higher / r_basic
 K3             = 2.0        # r_additional / r_basic
 SCALING        = 1.3532     # Weighted levy base / England wage bill
 
+# Self-insurance saving horizon
+RETIREMENT_AGE = 70         # assumed retirement age; default saving horizon = RETIREMENT_AGE − age
+
 # Care cost constants (LaingBuisson, uplifted to Q2 2026 prices at +2.75%)
 RESI_CARE_ANNUAL   = 69_356   # £/yr residential care home (£67,500 × 1.0275)
 HOME_CARE_ANNUAL   = 33_751   # £/yr visiting home care, 3 hrs/day (£32,850 × 1.0275)
@@ -155,7 +158,7 @@ st.markdown(
 st.markdown("---")
 
 # ── PROMINENT INPUTS ───────────────────────────────────────────────────────────
-col_sal, col_yr, col_assets = st.columns([2, 2, 2])
+col_sal, col_age, col_yr, col_assets = st.columns([2, 1.5, 1.5, 2])
 
 with col_sal:
     st.markdown("### 💷 Your annual salary")
@@ -173,6 +176,25 @@ with col_sal:
         label_visibility="collapsed",
     )
     st.caption("Default: £39,039 — England median full-time salary (ONS 2025–26)")
+
+with col_age:
+    st.markdown("### 🎂 Your age")
+    age = st.number_input(
+        "Age",
+        min_value=18,
+        max_value=95,
+        value=40,
+        step=1,
+        format="%d",
+        help=(
+            "Used to set a sensible default for how many years you'd spread the cost of "
+            f"an unforeseen care need over, assuming retirement around age {RETIREMENT_AGE} "
+            "(e.g. a 40-year-old defaults to a 30-year spread). You can still override this "
+            "below the left-hand chart."
+        ),
+        label_visibility="collapsed",
+    )
+    st.caption(f"Default saving horizon: {RETIREMENT_AGE} − age (min 5 yrs)")
 
 with col_yr:
     st.markdown("### 📅 Year")
@@ -213,9 +235,14 @@ with col_assets:
 
 st.markdown("---")
 
-# saving_years widget appears below the chart but its value is needed here;
-# read from session state on re-runs (defaults to 40 on first load).
-saving_years = int(st.session_state.get("saving_years_key", 40))
+# saving_years widget appears below the LHS chart but its value is needed here.
+# Its default tracks age (RETIREMENT_AGE − age); re-seed session state whenever
+# age changes, but leave a manual override in place while age stays the same.
+default_saving_years = int(max(5, min(50, RETIREMENT_AGE - age)))
+if st.session_state.get("_saving_years_age_seed") != age:
+    st.session_state["saving_years_key"] = default_saving_years
+    st.session_state["_saving_years_age_seed"] = age
+saving_years = int(st.session_state.get("saving_years_key", default_saving_years))
 
 # ── COMPUTED VALUES ────────────────────────────────────────────────────────────
 it            = income_tax(income)
@@ -356,10 +383,11 @@ with left:
     with col_sy:
         st.number_input(
             "Years to spread self-insurance costs",
-            min_value=5, max_value=50, value=saving_years, step=1,
+            min_value=5, max_value=50, step=1,
             key="saving_years_key",
-            help="How many years you'd have to save — roughly your working years remaining "
-                 "(e.g. 40 if you're ~25, 30 if you're ~35).",
+            help="How many years you'd have to save — defaults to your working years "
+                 f"remaining (retirement age {RETIREMENT_AGE} minus your age), but you "
+                 "can override it here.",
         )
     mid_note = (
         f" Assets in the £14,250–£23,250 band, are assumed to be £{MEANS_TEST_MID:,} (midpoint) for the chart,"
@@ -375,26 +403,39 @@ with left:
 
 
 
-# RIGHT: bar chart — levy trajectory by year with % increase labels on top
+# RIGHT: stacked bar — NCS levy on top of your existing IT/NI/Council Tax, by year
 with right:
-    st.markdown("#### Your monthly NCS levy by year  (% increase vs today's taxes)")
+    st.markdown("#### Your monthly contributions by year  (NCS levy on top of today's taxes)")
 
     all_monthly = [lv / 12 for lv in all_levies]
+    n_years     = len(ALL_YEARS)
+    monthly_it, monthly_ni, monthly_ct = it / 12, ni / 12, ct / 12
+    stack_top   = [monthly_it + monthly_ni + monthly_ct + m for m in all_monthly]
 
-    bar_colors = []
-    for yr in ALL_YEARS:
-        if yr == year:
-            bar_colors.append("#c00000")        # selected: deep red
-        elif yr > 2035:
-            bar_colors.append("#7030a0")        # Phase 2: purple
-        else:
-            bar_colors.append("#2e75b6")        # Phase 1: blue
+    # Outline the selected year's bar so it's easy to spot amid the stack, and
+    # fade every year except the selected one and the NCS-launch year (2036)
+    sel_idx        = ALL_YEARS.index(year)
+    launch_idx     = ALL_YEARS.index(2036)
+    line_widths    = [0.85 if i == sel_idx else 0 for i in range(n_years)]
+    line_colors    = ["#000000"] * n_years
+    bar_opacities  = [1.0 if i == sel_idx else 0.85 if i == launch_idx else 0.55 for i in range(n_years)]
 
     fig_ts = go.Figure()
     fig_ts.add_bar(
-        x=all_labels,
-        y=all_monthly,
-        marker_color=bar_colors,
+        name="Income Tax", x=all_labels, y=[monthly_it] * n_years,
+        marker=dict(color="#1f4e79", opacity=bar_opacities, line=dict(color=line_colors, width=line_widths)),
+    )
+    fig_ts.add_bar(
+        name="National Insurance", x=all_labels, y=[monthly_ni] * n_years,
+        marker=dict(color="#2e75b6", opacity=bar_opacities, line=dict(color=line_colors, width=line_widths)),
+    )
+    fig_ts.add_bar(
+        name="Council Tax", x=all_labels, y=[monthly_ct] * n_years,
+        marker=dict(color="#9dc3e6", opacity=bar_opacities, line=dict(color=line_colors, width=line_widths)),
+    )
+    fig_ts.add_bar(
+        name="NCS Levy", x=all_labels, y=all_monthly,
+        marker=dict(color="#c00000", opacity=bar_opacities, line=dict(color=line_colors, width=line_widths)),
         text=[f"+{p:.1f}%" for p in all_pcts],
         textposition="outside",
         textfont=dict(size=9, color="#333333"),
@@ -405,18 +446,19 @@ with right:
         ),
     )
 
-    # Subtle arrow annotation on selected bar
-    sel_idx = ALL_YEARS.index(year)
+    # Subtle arrow annotation above the selected bar's stack
     if levy_now > 0:
         fig_ts.add_annotation(
             x=all_labels[sel_idx],
-            y=all_monthly[sel_idx],
-            yshift=36,
+            y=stack_top[sel_idx],
+            yshift=34,
             text=f"◀ {year}",
             showarrow=False,
             font=dict(size=10, color="#c00000", family="Arial"),
             align="left",
         )
+
+    y_max = max(stack_top) if max(stack_top) > 0 else 100
 
     # Dotted divider before "NCS launched" bar
     fig_ts.add_vline(
@@ -425,22 +467,25 @@ with right:
     )
     fig_ts.add_annotation(
         x=10,
-        y=max(all_monthly) * 1.22 if max(all_monthly) > 0 else 100,
+        y=y_max * 1.22,
         text="NCS launched →",
         showarrow=False,
         font=dict(size=9, color="#7030a0"),
         align="center",
     )
 
-    y_max = max(all_monthly) if max(all_monthly) > 0 else 100
     fig_ts.update_layout(
+        barmode="stack",
         xaxis=dict(tickangle=-38, title="", tickfont=dict(size=9)),
         yaxis=dict(
             tickprefix="£", tickformat=",",
-            title="Monthly levy (£)",
+            title="Monthly contribution (£)",
             range=[0, y_max * 1.35],
         ),
-        showlegend=False,
+        legend=dict(
+            orientation="h", y=-0.28, x=0, font=dict(size=9),
+            entrywidth=140,
+        ),
         height=430, margin=dict(t=40, b=10, l=0, r=10),
         plot_bgcolor="white", paper_bgcolor="white",
     )
