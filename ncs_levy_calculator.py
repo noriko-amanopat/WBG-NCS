@@ -22,7 +22,7 @@ ICON_DATE       = IMAGES_DIR / "date.svg"
 ICON_ASSETS     = IMAGES_DIR / "assets.svg"
 
 st.set_page_config(
-    page_title="WBG's CarePool Levy Calculator",
+    page_title="WBG's CarePool Contribution Calculator",
     page_icon=str(LOGO_PATH),
     layout="wide",
 )
@@ -143,6 +143,7 @@ def levy_band_breakdown(y: float, agg_rate: float) -> dict:
         "add_income":    add_inc,    "add_rate":    rb * K3,  "add_levy":    add_inc    * rb * K3,
     }
 
+
 # ── STYLE FUNCTIONS ─────────────────────────────────────────────────
 
 def render_legend(items: list[tuple[str, str]] | list[tuple[str, str, bool]]) -> None:
@@ -187,14 +188,15 @@ def icon_heading(icon_path: Path, text: str, help: str | None = None, icon_width
 
 
 # ── HEADER ─────────────────────────────────────────────────────────────────────
-header_logo, header_title = st.columns([1, 8], vertical_alignment="center")
+
+header_logo, header_title = st.columns([1, 8], gap="large", vertical_alignment="center")
 with header_logo:
     st.image(str(LOGO_PATH))
 with header_title:
-    st.title(":primary[CarePool Levy Calculator]")
+    st.title(":primary[CarePool Contribution Calculator]")
 st.markdown(
     "This app allows you to estimate your annual contribution to fund the proposed "
-    "Women's Budget Group CarePool model. Add the inputs below to see what your contribution"
+    "Women's Budget Group CarePool model. Add the inputs below to see what your contribution "
     "would be, how it compares with your current tax bill, and how it would change over time. "
 )
 
@@ -246,8 +248,8 @@ st.caption(f"Default saving horizon: {RETIREMENT_AGE} − age (min 5 yrs)")
 icon_heading(
     ICON_DATE, "Year",
     help=(
-            "Choose the year you'd like to see your levy contribution for. " 
-            "The levy slowly increases until the year of launch (2036). "
+            "Choose the year you'd like to see your CarePool contribution for. " 
+            "The contribution slowly increases until the year of launch (2036). "
             f"Go back to the main page to see details behind our calculations."
     ),
 )
@@ -260,9 +262,9 @@ year = st.slider(
     label_visibility="collapsed",
 )
 if year <= 2035:
-    phase_name = f"Phase 1 — Year {year - 2025} of 10  ·  pre-funding"
+    phase_name = f"Phase 1: Year {year - 2025} of 10  ·  pre-funding"
 else:
-    phase_name = "Phase 2 — CarePool launched"
+    phase_name = "Phase 2: CarePool launched"
 st.caption(f"{year_label_plain(year)}  ·  {phase_name}")
 
 icon_heading(ICON_ASSETS, "Assets or savings above £23,250?")
@@ -328,7 +330,7 @@ else:  # below £14,250
 
 # ── KEY METRICS ────────────────────────────────────────────────────────────────
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("CarePool levy", f"£{levy_now/12:,.0f}/month", f"£{levy_now:,.0f}/year")
+m1.metric("CarePool contribution", f"£{levy_now/12:,.0f}/month", f"£{levy_now:,.0f}/year")
 m2.metric("Increase on current tax bill", f"+{pct_inc:.1f}%")
 m3.metric("Effective rate on income", f"{levy_now/income*100:.2f}%" if income > 0 else "—")
 m4.metric(
@@ -342,7 +344,7 @@ st.markdown("---")
 # ── First chart ──────────────────────────────────────────────────────────────────
 
 # Stacked bar — before / with CarePool / without CarePool self-insurance scenarios
-st.markdown("#### Annual cost: CarePool levy vs. self-funding")
+st.markdown("#### What would the cost of an unforeseen care need be with and without CarePool?")
 
 if has_assets == "Yes (above £23,250)":
     no_assets_note = ""
@@ -405,7 +407,7 @@ fig_bar.add_vline(
     x=1.5, line_dash="dash", line_color="#7B7783", line_width=1.5,
 )
 fig_bar.add_annotation(
-    x=1.5525, y=0, yref="paper", yanchor="bottom", yshift=280,
+    x=1.5525, y=0, yref="paper", yanchor="bottom", yshift=350,
     text="← with CarePool  |  without CarePool →",
     showarrow=False, font=dict(size=15, color="#7B7783"),
     bgcolor="white",
@@ -463,8 +465,8 @@ st.caption(
 
 # ── Context:  ──────────────────────────────────────────────────────────────────
 # ── WITHOUT CarePool: SELF-FUNDING COMPARISON ──────────────────────────────────────
-st.markdown("---")
-st.markdown("### What would care cost you without CarePool?")
+
+st.markdown("##### Key takeaways:")
 
 RESI_YEARS = 3
 resi_total = RESI_CARE_ANNUAL * RESI_YEARS
@@ -495,15 +497,15 @@ with sc1:
             f"capital above £{MEANS_TEST_LOWER:,}.  \n\n"
             f"Assuming you have £{MEANS_TEST_MID:,} assets (the midpoint), that's **£{TARIFF_INCOME_ANNUAL}/year**. "
             f"Over {RESI_YEARS} years of residential care, your total contribution would be "
-            f"**£{tariff_total:,}** — far less than full self-funding, but not zero.  \n\n"
-            f"Saving for that over **{saving_years} years** (feel free to adjust the number"
+            f"**£{tariff_total:,}**. This is far less than full self-funding, but not zero.  \n\n"
+            f"Saving for that over **{saving_years} years** (feel free to adjust the number "
             f"of years in the window above) means setting aside "
             f"**£{tariff_monthly:,.0f}/month**."
         )
     else:  # below £14,250
         st.markdown(
             f"Your assets are below £{MEANS_TEST_LOWER:,}, so the council would pay your "
-            f"care costs in full — no tariff income applies.  \n\n"
+            f"care costs in full; no tariff income applies.  \n\n"
             f"Note that both thresholds have been frozen since 2010 and are not uprated "
             f"with inflation. If you accumulate savings or own a home over a working life, "
             f"you may well move into a higher band by the time you need care."
@@ -513,24 +515,25 @@ with sc2:
     st.markdown("**Under CarePool, those same care years cost you nothing extra.**")
     st.markdown(
         f"The entitlement floor covers up to **4 years of residential care** and "
-        f"**3 years of home care** in full — paid by the state regardless of your assets."
+        f"**3 years of home care** in full regardless of your assets."
     )
     st.markdown(
-        f"Your CarePool levy would start at **£{levy_yr1_monthly:,.0f}/month** (2026–27) "
+        f"Your CarePool contribution would start at **£{levy_yr1_monthly:,.0f}/month** (2026–27) "
         f"and reaches **£{levy_now_monthly:,.0f}/month** by {year_label_plain(year)}.  \n\n"
     )
     if has_assets == "Yes (above £23,250)" and monthly_saving > levy_yr1_monthly:
         ratio = monthly_saving / levy_yr1_monthly
         st.success(
             f"Self-insuring against just **one** {RESI_YEARS}-year residential care episode "
-            f"would cost **{ratio:.1f}× more per month** than the CarePool levy from day one — "
-            f"and the levy covers the worst case, not just one scenario."
+            f"would cost **{ratio:.1f}× more per month** than the CarePool contribution from day one — "
+            f"and the contribution covers the worst case, not just one scenario."
         )
     elif has_assets == "£14,250–£23,250":
         st.success(
             f"To provide safeguards for individuals who earn above the income tax threshold (£12,570) " 
-            f"but have limited accumulated assets, we need data on the distribution"
-            f"of assets and savings across income bands."
+            f"but have limited accumulated assets, we need data on the distribution "
+            f"of assets and savings across income and age bands. We will update out app once we "
+            f"have analysed those data."
         )
     else:
         st.success(
@@ -539,8 +542,8 @@ with sc2:
             f"of assets and savings across income bands."
         )
         # st.success(
-        #     f"Even if you have no assets, the CarePool levy is a small monthly contribution "
-        #     f"that guarantees coverage for the worst-case scenario — up to 4 years of residential care "
+        #     f"Even if you have no assets, the CarePool contribution is a small monthly contribution "
+        #     f"that guarantees coverage for the worst-case scenario; up to 4 years of residential care "
         #     f"and 3 years of home care."
         # )
 
@@ -552,8 +555,8 @@ with sc2:
 st.markdown("---")
 
 # ── Second chart ──────────────────────────────────────────────────────────────────
-# Stacked bar — CarePool levy on top of your existing IT/NI/Council Tax, by year
-st.markdown("#### Your monthly contributions by year  (CarePool levy on top of today's taxes)")
+# Stacked bar — CarePool contribution on top of your existing IT/NI/Council Tax, by year
+st.markdown("#### Your monthly contributions by year (CarePool contribution on top of today's total tax bill = IT + NI + CT)")
 
 all_monthly = [lv / 12 for lv in all_levies]
 n_years     = len(ALL_YEARS)
@@ -582,7 +585,7 @@ fig_ts.add_bar(
     marker=dict(color=colouraccent_3, opacity=bar_opacities, line=dict(color=line_colors, width=line_widths)),
 )
 fig_ts.add_bar(
-    name="CarePool Levy", x=all_labels, y=all_monthly,
+    name="CarePool Contribution", x=all_labels, y=all_monthly,
     marker=dict(color=maincolour_1, opacity=bar_opacities, line=dict(color=line_colors, width=line_widths)),
     text=[f"+{p:.1f}%" for p in all_pcts],
     textposition="outside",
@@ -639,10 +642,10 @@ with ts_chart_col:
     st.plotly_chart(fig_ts, use_container_width=True)
 with ts_legend_col:
     render_legend([
-        ("CarePool Levy", maincolour_1),
-        ("Council Tax", colouraccent_3),
-        ("National Insurance", colouraccent_2),
-        ("Income Tax", colouraccent_1),
+        ("CarePool contribution", maincolour_1),
+        ("Council Tax (CT)", colouraccent_3),
+        ("National Insurance (NI)", colouraccent_2),
+        ("Income Tax (IT)", colouraccent_1),
     ])
 
 # ── CONTEXT BOXES ──────────────────────────────────────────────────────────────
@@ -652,9 +655,9 @@ with c1:
     levy_yr1 = carepool_levy(income, agg_rate_for_year(2026))
     pct_yr1  = levy_yr1 / current_total * 100 if current_total > 0 else 0
     st.info(
-        f"**Starting levy (2026–27):** £{levy_yr1/12:,.2f}/month · £{levy_yr1:,.0f}/yr  \n"
+        f"**Starting contribution (2026–27):** £{levy_yr1/12:,.2f}/month · £{levy_yr1:,.0f}/yr  \n"
         f"A **{pct_yr1:.1f}% increase** on your current combined tax bill "
-        f"of £{current_total:,.0f}/yr. The levy starts low and ramps gradually."
+        f"of £{current_total:,.0f}/yr. The contribution starts low and ramps gradually."
     )
 with c2:
     levy_yr10 = carepool_levy(income, agg_rate_for_year(2035))
