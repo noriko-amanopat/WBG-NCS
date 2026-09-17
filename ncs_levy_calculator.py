@@ -675,7 +675,7 @@ with c1:
     levy_yr1 = carepool_levy(income, agg_rate_for_year(2026))
     pct_yr1  = levy_yr1 / current_total * 100 if current_total > 0 else 0
     st.info(
-        f"**Starting contribution (2026–27):** £{levy_yr1/12:,.2f}/month · £{levy_yr1:,.0f}/yr  \n"
+        f"**Starting contribution (2026–27):** £{levy_yr1/12:,.2f}/month · £{levy_yr1:,.0f}/yr.  \n\n"
         f"A **{pct_yr1:.1f}% increase** on your current combined tax bill "
         f"of £{current_total:,.0f}/yr. The contribution starts low and ramps gradually."
     )
@@ -683,11 +683,13 @@ with c2:
     levy_yr10 = carepool_levy(income, agg_rate_for_year(2035))
     pct_yr10  = levy_yr10 / current_total * 100 if current_total > 0 else 0
     st.info(
-        f"**By CarePool launch (2035–36):** £{levy_yr10/12:,.2f}/month · £{levy_yr10:,.0f}/yr  \n"
+        f"**By CarePool launch (2035–36):** £{levy_yr10/12:,.2f}/month · £{levy_yr10:,.0f}/yr.  \n\n"
         f"A **{pct_yr10:.1f}% increase** on today's bill. The 10-year pre-funding phase "
         f"builds a **£194bn reserve** — so individual contributions stay stable at "
         f"launch rather than jumping further."
     )
+
+st.markdown("---")
 
 # ── BANNER: link back to the full CarePool proposal ────────────────────────────
 st.markdown(
