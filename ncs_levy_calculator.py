@@ -1,19 +1,19 @@
 """
-CarePool CarePool — Individual Levy Calculator
+CarePool — Individual Levy Calculator
 Women's Budget Group | August 2026
 
-Based on Section F (Levy Estimates) of CarePool_CarePool_Tool_v4.xlsx.
+Based on Section F (Levy Estimates) of CarePool_CarePool_Tool_v5.xlsx.
 
-Run:  streamlit run CarePool_levy_calculator.py
-Requires: streamlit, plotly  (pip install streamlit plotly)
+Running requires: streamlit, plotly  (pip install streamlit plotly)
 """
-
+# ── Packages ──────────────────────────────────────────────────────────────
 import math
 from pathlib import Path
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 
+# ── Figures/Icons ─────────────────────────────────────────────────────────
 IMAGES_DIR      = Path(__file__).parent / "Images"
 LOGO_PATH       = IMAGES_DIR / "WBG-Concepts_logo.svg"
 ICON_EARNINGS   = IMAGES_DIR / "earnings.svg"
@@ -21,25 +21,32 @@ ICON_BIRTHDAY   = IMAGES_DIR / "birthday.svg"
 ICON_DATE       = IMAGES_DIR / "date.svg"
 ICON_ASSETS     = IMAGES_DIR / "assets.svg"
 
+# ─── Page configuration ──────────────────────────────────────────────────────
 st.set_page_config(
     page_title="WBG's CarePool Contribution Calculator",
     page_icon=str(LOGO_PATH),
     layout="wide",
 )
 
-# Hide the "link to heading" anchor icon Streamlit adds automatically to every 
-# markdown heading (###, ####, etc.), which is not useful with nothing to link to. 
-# Also darken # st.caption() text: Streamlit renders it at the same colour as body text but
-# with opacity: 0.6, which is a bit too faint to see comfortably.
+# The following commands tweak some Streamlit defaults:
+# 1. Hide the "link to heading" anchor icon that Streamlit adds automatically to 
+#    markdown headings (###, ####, etc.). In this case, there's nothing to link to.
+# 2. darken # st.caption() text: Streamlit shows these at the same colour as body 
+#    text but with opacity: 0.6, which is a bit too faint for some people.
+# 3. let st.metric()'s delta text flow into a second line if needed.
 st.markdown(
     "<style>"
     "[data-testid='stHeaderActionElements'] {display: none;}"
     "[data-testid='stCaptionContainer'] {opacity: 0.7;}" # adjust opacity of captions
+    "[data-testid='stMetricDelta'] {height: auto; align-items: flex-start;}"
+    "[data-testid='stMetricDelta'] [data-testid='stMarkdownContainer'],"
+    "[data-testid='stMetricDelta'] [data-testid='stMarkdownContainer'] p "
+    "{white-space: normal; overflow: visible;}"
     "</style>",
     unsafe_allow_html=True,
 )
 
-# ── COLOUR PALETTE ──────────────────────────────────────────────────────────────
+# ── Colour palette: WBG concepts ────────────────────────────────────────────────────────────
 maincolour_1   = "#550692"  # deep purple — primary WBG colour 
 colouraccent_1 = "#1B0692"
 colouraccent_2 = "#062C92"
@@ -47,9 +54,9 @@ colouraccent_3 = "#066692"
 maincolour_2   = "#069284"  # teal — primary CarePool colour 
 
 
-# ── CONSTANTS (from CarePool_CarePool_Tool_v4.xlsx, Levy Estimates tab) ─────────────
-# capitalised to make it easier to see where they are used in calculations, and to avoid 
-# accidental reassignment.
+# ── Constants (from CarePool_CarePool_Tool_v5.xlsx, Levy Estimates tab) ─────────────
+# capitalised to make it easier to see where they are used in calculations, and to  
+# avoid accidental reassignment – using python's numeric literal syntax for readability.
 
 # Income tax
 PA             = 12_570     # Personal allowance 2025-26
@@ -74,12 +81,12 @@ SCALING        = 1.3532     # Weighted levy base / England wage bill
 RETIREMENT_AGE = 70         # assumed retirement age; default saving horizon = RETIREMENT_AGE − age
 
 # Care cost constants (LaingBuisson, uplifted to Q2 2026 prices at +2.75%)
-RESI_CARE_ANNUAL   = 69_356   # £/yr residential care home (£67,500 × 1.0275)
-HOME_CARE_ANNUAL   = 33_751   # £/yr visiting home care, 3 hrs/day (£32,850 × 1.0275)
+RESI_CARE_ANNUAL   = 69_356   # £/yr residential care home (£67,500 * 1.0275)
+HOME_CARE_ANNUAL   = 33_751   # £/yr visiting home care, 3 hrs/day (£32,850 * 1.0275)
 MEANS_TEST_UPPER   = 23_250   # upper capital limit: self-fund above this (frozen since 2010)
 MEANS_TEST_LOWER   = 14_250   # lower capital limit: full LA support below this (frozen since 2010)
 MEANS_TEST_MID     = 18_750   # midpoint assumption for £14,250–£23,250 band
-# Tariff income for midpoint: £1/wk per £250 (or part) above lower limit → 18 × 52 = £936/yr
+# Tariff income for midpoint: £1/wk per £250 (or part) above lower limit → 18 * 52 = £936/yr
 TARIFF_INCOME_ANNUAL = math.ceil((MEANS_TEST_MID - MEANS_TEST_LOWER) / 250) * 52  # £936
 # see https://www.nhs.uk/social-care-and-support/money-work-and-benefits/when-the-council-might-pay-for-your-care/
 
@@ -94,12 +101,10 @@ def agg_rate_for_year(yr: int) -> float:
         return 0.01 + 0.01 * (yr - 2026) / 9
     return 0.0200  # Phase 2 with pre-funded reserve
 
-
 def year_label(yr: int) -> str:
     if yr <= 2035:
         return f"{yr}–{yr - 1999:02d}"
     return "CarePool launched<br>(2036–37)"
-
 
 def year_label_plain(yr: int) -> str:
     if yr <= 2035:
@@ -107,16 +112,19 @@ def year_label_plain(yr: int) -> str:
     return "CarePool launched (2036–37)"
 
 
-# ── CORE CALCULATION FUNCTIONS ─────────────────────────────────────────────────
+# ── Core calculator functions ─────────────────────────────────────────────────
 
 def income_tax(y: float) -> float:
-    pa      = max(0.0, PA - max(0.0, y - 100_000) / 2)
-    taxable = max(0.0, y - pa)
-    tax     = min(taxable, 37_700) * 0.20
-    if taxable > 37_700:
-        tax += min(taxable - 37_700, 74_870) * 0.40
-    if taxable > 112_570:
-        tax += (taxable - 112_570) * 0.45
+    # Bands are split on GROSS income (PA→BASIC_UPPER, BASIC_UPPER→HIGHER_UPPER,
+    # above HIGHER_UPPER), not on taxable income with fixed band widths — the
+    # latter silently assumes a full, untapered PA and overcharges anyone in or
+    # above the £100k–£125,140 taper zone, since the 20%/40% bands need to
+    # widen as the taper shrinks the PA rather than staying a fixed £37,700/
+    # £74,870. Verified against the known "60% marginal rate" trap in that zone.
+    pa   = max(0.0, PA - max(0.0, y - 100_000) / 2)
+    tax  = 0.20 * max(0.0, min(y, BASIC_UPPER) - pa)
+    tax += 0.40 * max(0.0, min(y, HIGHER_UPPER) - BASIC_UPPER)
+    tax += 0.45 * max(0.0, y - HIGHER_UPPER)
     return tax
 
 def ni_contributions(y: float) -> float:
@@ -144,22 +152,22 @@ def levy_band_breakdown(y: float, agg_rate: float) -> dict:
     }
 
 
-# ── STYLE FUNCTIONS ─────────────────────────────────────────────────
+# ── Style functions ─────────────────────────────────────────────────
 
 def render_legend(items: list[tuple[str, str]] | list[tuple[str, str, bool]]) -> None:
-    """Custom vertical legend (coloured swatch + colour-matched label) for the
-    right-hand column next to a chart — Plotly's own legend only supports one
+    """Display a vertical legend (coloured swatch + colour-matched label) for the
+    right-hand column next to a chart — Plotly's default legends support one
     uniform font colour, not one colour per entry. Pass a 3rd tuple element of
     True to draw the swatch with the same diagonal hatch as a patterned bar."""
     def swatch_style(color: str, hatched: bool) -> str:
         if hatched:
             # -45deg (not 45deg) to match Plotly's marker_pattern_shape="/",
-            # which draws bottom-left-to-top-right lines, not top-left-to-
-            # bottom-right ones.
+            # which are the ones that appear in the legend marker.
             return (f"background-image:repeating-linear-gradient(-45deg,"
                      f"{color},{color} 3px,white 3px,white 6px);")
         return f"background:{color};"
 
+    # html for the custom colour charts' legends
     rows = "".join(
         f'<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px;">'
         f'<span style="flex:0 0 12px;width:12px;height:12px;border-radius:2px;'
@@ -168,13 +176,13 @@ def render_legend(items: list[tuple[str, str]] | list[tuple[str, str, bool]]) ->
         f'</div>'
         for item in items
     )
+    # render the legend in a div with some padding to separate it from the chart
     st.markdown(f'<div style="padding-top:1.5rem;">{rows}</div>', unsafe_allow_html=True)
+    # Note that the setting `unsafe_allow_html=True` just tells Streamlit to render any 
+    # HTML tags in between <div>...</div>. 
 
 def icon_heading(icon_path: Path, text: str, help: str | None = None, icon_width: int = 28) -> None:
-    """##### heading with a small SVG image as an icon. SVGs are vector, so
-    Streamlit hands them to the browser to rasterise at whatever size is
-    needed — crisp at any width, unlike the raster (PNG) icons this replaced,
-    which needed a manual resize/sharpen pass to avoid looking blurry.
+    """##### heading with a small SVG image as an icon to avoid looking blurriness.
 
     Pass `help` here (rather than on the widget below) when that widget uses
     label_visibility="collapsed" — Streamlit nests a widget's help tooltip
@@ -187,7 +195,9 @@ def icon_heading(icon_path: Path, text: str, help: str | None = None, icon_width
         st.markdown(f"##### {text}", help=help)
 
 
-# ── HEADER ─────────────────────────────────────────────────────────────────────
+# ––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+# ── Header of the page ──────────────────────────────────────────────────────────
+# ––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
 header_logo, header_title = st.columns([1, 8], gap="large", vertical_alignment="center")
 with header_logo:
@@ -195,14 +205,17 @@ with header_logo:
 with header_title:
     st.title(":primary[CarePool Contribution Calculator]")
 st.markdown(
-    "This app allows you to estimate your annual contribution to fund the proposed "
-    "Women's Budget Group CarePool model. Add the inputs below to see what your contribution "
-    "would be, how it compares with your current tax bill, and how it would change over time. "
+    "This app allows you to estimate your annual contribution to fund the proposed " 
+    "Women's Budget Group National Care Service model, CarePool. Fill in your details "
+    "below to see how much your CarePool Levy contribution would be and how it compares "
+    "to self-funding care under the current rules. "
 )
 
 st.markdown("---")
 
-# ── MAIN USER INPUTS ───────────────────────────────────────────────────────────
+# ––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+# ── User inputs/levers ──────────────────────────────────────────────────────────
+# ––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 # Stacked one-per-row (rather than side-by-side columns) so labels, captions and
 # help text have the full page width to work with — keeps them legible at larger
 # font sizes on small screens.
@@ -216,14 +229,14 @@ icon_heading(
 )
 income = st.number_input(
     "Annual gross income (£)",
-    min_value=0,
-    max_value=500_000,
-    value=39_039,
-    step=500,
-    format="%d",
-    label_visibility="collapsed",
+    min_value = 0,
+    max_value = 500_000,
+    value     = 39_039,
+    step      = 500,
+    format    = "%d",
+    label_visibility = "collapsed",
 )
-st.caption("Default: £39,039 – England's median full-time salary (ONS 2025–26)")
+st.caption(f"= £{income:,} · Default: £39,039 – England's median full-time salary (ONS 2025–26)")
 
 icon_heading(
     ICON_BIRTHDAY, "Your age",
@@ -236,30 +249,30 @@ icon_heading(
 )
 age = st.number_input(
     "Age",
-    min_value=18,
-    max_value=95,
-    value=40,
-    step=1,
-    format="%d",
-    label_visibility="collapsed",
+    min_value = 18,
+    max_value = 95,
+    value     = 40,
+    step      = 1,
+    format    = "%d",
+    label_visibility = "collapsed",
 )
 st.caption(f"Default saving horizon: {RETIREMENT_AGE} − age (min 5 yrs)")
 
 icon_heading(
-    ICON_DATE, "Year",
+    ICON_DATE, "Year: For what year would you like to see your levy contribution?",
     help=(
             "Choose the year you'd like to see your CarePool contribution for. " 
             "The contribution slowly increases until the year of launch (2036). "
-            f"Go back to the main page to see details behind our calculations."
+            "Go back to the main page to see details behind our calculations."
     ),
 )
 year = st.slider(
     "Year",
-    min_value=2026,
-    max_value=2036,
-    value=2027,
-    step=1,
-    label_visibility="collapsed",
+    min_value = 2026,
+    max_value = 2036,
+    value     = 2027,
+    step      = 1,
+    label_visibility = "collapsed",
 )
 if year <= 2035:
     phase_name = f"Phase 1: Year {year - 2025} of 10  ·  pre-funding"
@@ -270,10 +283,10 @@ st.caption(f"{year_label_plain(year)}  ·  {phase_name}")
 icon_heading(ICON_ASSETS, "Assets or savings above £23,250?")
 has_assets = st.radio(
     "Assets / savings level",
-    options=["Yes (above £23,250)", "£14,250–£23,250", "No (below £14,250)"],
-    index=0,
-    horizontal=False,
-    label_visibility="collapsed",
+    options    = ["Yes (above £23,250)", "£14,250–£23,250", "No (below £14,250)"],
+    index      = 0,
+    horizontal = False,
+    label_visibility = "collapsed",
 )
 with st.expander("What does this mean?"):
     st.markdown(
@@ -289,7 +302,10 @@ with st.expander("What does this mean?"):
 
 st.markdown("---")
 
-# saving_years widget appears below the LHS chart but its value is needed here.
+
+# ── Compute values for key metrics and charts ────────────────────────────────────────────────────────────
+
+# saving_years widget appears below the first chart but its value is needed here.
 # Its default tracks age (RETIREMENT_AGE − age); re-seed session state whenever
 # age changes, but leave a manual override in place while age stays the same.
 default_saving_years = int(max(5, min(50, RETIREMENT_AGE - age)))
@@ -298,7 +314,6 @@ if st.session_state.get("_saving_years_age_seed") != age:
     st.session_state["_saving_years_age_seed"] = age
 saving_years = int(st.session_state.get("saving_years_key", default_saving_years))
 
-# ── COMPUTED VALUES ────────────────────────────────────────────────────────────
 it            = income_tax(income)
 ni            = ni_contributions(income)
 ct            = COUNCIL_TAX
@@ -329,16 +344,19 @@ else:  # below £14,250
     self_insure_resi = 0.0
 
 # ── KEY METRICS ────────────────────────────────────────────────────────────────
-m1, m2, m3, m4 = st.columns(4)
+m1, m2, m3, m4, m5 = st.columns(5)
 m1.metric("CarePool contribution", f"£{levy_now/12:,.0f}/month", f"£{levy_now:,.0f}/year")
-m2.metric("Increase on current tax bill", f"+{pct_inc:.1f}%")
-m3.metric("Effective rate on income", f"{levy_now/income*100:.2f}%" if income > 0 else "—")
+m2.metric("Increase on total tax paid", f"+{pct_inc:.1f}%")
+m3.metric("Effective additional rate on income", f"{levy_now/income*100:.2f}%" if income > 0 else "—")
 m4.metric(
-    "Your current annual contributions (IT + NI + CT)",
+    "Your total tax amount without CarePool",
     f"£{current_total:,.0f}",
-    f"they'd be £{current_total + levy_now:,.0f} with CarePool levy",
 )
-
+m5.metric(
+    "Your total tax amount with CarePool",
+    f"£{current_total + levy_now:,.0f}",
+    f"You'd pay £{levy_now:,.0f} more a year with the CarePool Levy",
+)
 st.markdown("---")
 
 # ── First chart ──────────────────────────────────────────────────────────────────
@@ -404,12 +422,12 @@ fig_bar.add_bar(
 
 # Dashed divider between "With CarePool" (bar 1) and "Without CarePool" (bar 2)
 fig_bar.add_vline(
-    x=1.5, line_dash="dash", line_color="#7B7783", line_width=1.5,
+    x=1.5, line_dash="dash", line_color="rgba(0,0,0,0.8)", line_width=1.5,
 )
 fig_bar.add_annotation(
     x=1.5525, y=0, yref="paper", yanchor="bottom", yshift=350,
     text="← with CarePool  |  without CarePool →",
-    showarrow=False, font=dict(size=15, color="#7B7783"),
+    showarrow=False, font=dict(size=15, color="rgba(0,0,0,0.8)"),
     bgcolor="white",
 )
 
@@ -444,7 +462,7 @@ with bar_legend_col:
 col_sy, _ = st.columns([5, 5])
 with col_sy:
     st.number_input(
-        "Years to spread self-insurance costs",
+        "Years to spread self-funding costs",
         min_value=5, max_value=50, step=1,
         key="saving_years_key",
         help="How many years you'd have to save — defaults to your working years "
@@ -524,7 +542,7 @@ with sc2:
     if has_assets == "Yes (above £23,250)" and monthly_saving > levy_yr1_monthly:
         ratio = monthly_saving / levy_yr1_monthly
         st.success(
-            f"Self-insuring against just **one** {RESI_YEARS}-year residential care episode "
+            f"Self-funding against just **one** {RESI_YEARS}-year residential care episode "
             f"would cost **{ratio:.1f}× more per month** than the CarePool contribution from day one — "
             f"and the contribution covers the worst case, not just one scenario."
         )
@@ -556,7 +574,9 @@ st.markdown("---")
 
 # ── Second chart ──────────────────────────────────────────────────────────────────
 # Stacked bar — CarePool contribution on top of your existing IT/NI/Council Tax, by year
-st.markdown("#### Your monthly contributions by year (CarePool contribution on top of today's total tax bill = IT + NI + CT)")
+st.markdown("#### What would your monthly CarePool contribution be on top of today's total "
+            "tax bill (Income Tax, National Insurance, Council Tax)?"
+            )
 
 all_monthly = [lv / 12 for lv in all_levies]
 n_years     = len(ALL_YEARS)
@@ -614,7 +634,7 @@ y_max = max(stack_top) if max(stack_top) > 0 else 100
 # Dotted divider before "CarePool launched" bar
 fig_ts.add_vline(
     x=9.5,
-    line_dash="dot", line_color="#888888", line_width=1.2,
+    line_dash="dot", line_color="rgba(0,0,0,0.8)", line_width=1.2,
 )
 fig_ts.add_annotation(
     x=8.65,
@@ -643,9 +663,9 @@ with ts_chart_col:
 with ts_legend_col:
     render_legend([
         ("CarePool contribution", maincolour_1),
-        ("Council Tax (CT)", colouraccent_3),
-        ("National Insurance (NI)", colouraccent_2),
-        ("Income Tax (IT)", colouraccent_1),
+        ("Council Tax", colouraccent_3),
+        ("National Insurance", colouraccent_2),
+        ("Income Tax", colouraccent_1),
     ])
 
 # ── CONTEXT BOXES ──────────────────────────────────────────────────────────────
@@ -668,6 +688,26 @@ with c2:
         f"builds a **£194bn reserve** — so individual contributions stay stable at "
         f"launch rather than jumping further."
     )
+
+# ── BANNER: link back to the full CarePool proposal ────────────────────────────
+st.markdown(
+    f"""
+    <div style="background:{maincolour_1};border-radius:8px;padding:1rem 1.5rem;
+                margin:1.5rem 0;display:flex;align-items:center;justify-content:space-between;
+                gap:1rem;flex-wrap:wrap;">
+        <span style="color:white;font-size:1rem;">
+            Want to find out more about CarePool?
+        </span>
+        <a href="https://www.wbg.org.uk/publication-library/wbg-concepts/carepool/"
+           target="_blank" rel="noopener noreferrer"
+           style="background:white;color:{maincolour_1};padding:0.5rem 1.25rem;border-radius:6px;
+                  text-decoration:none;font-weight:600;white-space:nowrap;">
+            Click here to return to the CarePool homepage.
+        </a>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ── FOOTER ─────────────────────────────────────────────────────────────────────
 st.markdown("---")
